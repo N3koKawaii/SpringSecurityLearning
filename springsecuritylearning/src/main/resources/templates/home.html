@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Page</title>
+</head>
+<body>
+<h2>Welcome to the Home Page</h2>
+<p>This page is accessible to everyone — no login required.</p>
+
+<!-- Login button -->
+<form th:action="@{/custom-login}" method="get">
+    <button type="submit">Login</button>
+</form>
+
+<form th:action="@{/perform-logout}" method="post">
+    <button type="submit">Logout</button>
+</form>
+
+<h1>Authentication Information</h1>
+<p><strong th:text="${isLogin}"></strong></p>
+
+</body>
+</html>
