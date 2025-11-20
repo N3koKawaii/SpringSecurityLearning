@@ -1,67 +1,69 @@
 package com.example.springsecuritylearning.config;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
+import com.example.springsecuritylearning.auth.CustomAccessDeniedHandler;
+import com.example.springsecuritylearning.auth.CustomAuthenticationEntryPoint;
+import com.example.springsecuritylearning.service.MyUserDetailsService;
+
+@EnableMethodSecurity   
 @Configuration
 public class SecurityConfig {
-    @Bean
-    public UserDetailsService userDetailsService(PasswordEncoder encoder){
-        UserDetails user = User.withUsername("user")
-                .password(encoder.encode("1234"))
-                .roles("USER")
-                .build();
+    private final MyUserDetailsService myUserDetailsService;
 
-        UserDetails admin = User.withUsername("admin")
-                .password(encoder.encode("admin123"))
-                .roles("ADMIN")
-                .build();
+        public SecurityConfig(MyUserDetailsService myUserDetailsService) {
+                this.myUserDetailsService = myUserDetailsService;
+                    }
 
-        return new InMemoryUserDetailsManager(user, admin);
-    }
+                        @Bean
+                            public PasswordEncoder passwordEncoder(){
+                                    return new BCryptPasswordEncoder();
+                                        }
 
-    @Bean
-    public PasswordEncoder passwordEncoder(){
-        return new BCryptPasswordEncoder();
-    }
+                                            @Bean
+                                                public SecurityFilterChain filterChain(
+                                                                        HttpSecurity http,
+                                                                                                CustomAuthenticationEntryPoint authEntryPoint,
+                                                                                                                        CustomAccessDeniedHandler deniedHandler) throws Exception{
+                                                                                                                                http
+                                                                                                                                            .csrf(csrf -> csrf.disable())
+                                                                                                                                                        .authorizeHttpRequests(auth -> auth
+                                                                                                                                                                        .requestMatchers("/").hasRole("GUEST")
+                                                                                                                                                                                        .requestMatchers("/admin").hasRole("ADMIN")
+                                                                                                                                                                                                        .requestMatchers("/user").hasRole("USER")
+                                                                                                                                                                                                                        .anyRequest().authenticated()
+                                                                                                                                                                                                                                    )
+                                                                                                                                                                                                                                                .httpBasic(Customizer.withDefaults())
+                                                                                                                                                                                                                                                            .exceptionHandling(ex -> ex
+                                                                                                                                                                                                                                                                            .authenticationEntryPoint(authEntryPoint)  //401
+                                                                                                                                                                                                                                                                                            .accessDeniedHandler(deniedHandler)       //403
+                                                                                                                                                                                                                                                                                                        )
+                                                                                                                                                                                                                                                                                                                    .sessionManagement(session -> session
+                                                                                                                                                                                                                                                                                                                                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                                                                                                                                                                                                                                                                                                                                                )
+                                                                                                                                                                                                                                                                                                                                                            .anonymous(anon -> anon.authorities(List.of(new SimpleGrantedAuthority("ROLE_GUEST"))));
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            //.csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/home", "/", "/custom-login").permitAll()       // public
-                .requestMatchers("/admin").hasRole("ADMIN") // only admin
-                .requestMatchers("/user").hasAnyRole("USER", "ADMIN")   // Allow both
-                .anyRequest().authenticated()               // All others need login
-            )
-            .formLogin(form -> form
-                .loginPage("/custom-login")          // custom login page
-                .loginProcessingUrl("/login") // same endpoint form submits to
-                .successHandler(customSuccessHandler()) // redirect after successful login
-                .failureUrl("/custom-login?error=true")
-                .permitAll())  // use default login page
-            .logout(logout -> logout
-                .logoutUrl("/perform-logout")
-                .logoutSuccessUrl("/logout-success")
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
-                .permitAll()); // default logout
-        
-        return http.build();
-    }
+                                                                                                                                                                                                                                                                                                                                                                    return http.build();
+                                                                                                                                                                                                                                                                                                                                                                        }
 
-    @Bean
-    public AuthenticationSuccessHandler customSuccessHandler() {
-        return new CustomAuthenticationSuccessHandler();
-    }
-}
+                                                                                                                                                                                                                                                                                                                                                                            @Bean
+                                                                                                                                                                                                                                                                                                                                                                                public RoleHierarchy roleHierarchy() {
+                                                                                                                                                                                                                                                                                                                                                                                        return RoleHierarchyImpl.fromHierarchy("ROLE_ADMIN > ROLE_USER > ROLE_GUEST");
+                                                                                                                                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                                                                                                                    }
+
+                                                                                                                                                                                                                                                                                                                                                                                                    }
+                                                                                                                                                                                                                                                                                                                                                                                                    
