@@ -40,6 +40,19 @@ public class JwtUtil {
                 .compact();
     }
 
+    public String generateRefreshToken(UserDetails userDetails, long refreshExpirationMs){
+        var roles = userDetails.getAuthorities().stream()
+                .map(Object::toString).toList();
+
+        return Jwts.builder()
+                .setSubject(userDetails.getUsername())
+                .claim("roles",roles)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshExpirationMs))
+                .signWith(key, SignatureAlgorithm.HS512)
+                .compact();
+    }
+
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver){
         Claims claims = parseClaims(token);
         return claimsResolver.apply(claims);
