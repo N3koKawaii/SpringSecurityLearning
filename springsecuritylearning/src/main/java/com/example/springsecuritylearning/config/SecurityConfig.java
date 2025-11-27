@@ -8,30 +8,56 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.example.springsecuritylearning.auth.CustomAccessDeniedHandler;
 import com.example.springsecuritylearning.auth.CustomAuthenticationEntryPoint;
 import com.example.springsecuritylearning.model.AppUser;
 import com.example.springsecuritylearning.repository.UserRepository;
-import com.example.springsecuritylearning.service.MyUserDetailsService;
+
+import lombok.RequiredArgsConstructor;
 
 @EnableMethodSecurity
 @Configuration
+@RequiredArgsConstructor
 public class SecurityConfig {
-    private final MyUserDetailsService myUserDetailsService;
+    private final JwtUtil jwtUtil;
 
-    public SecurityConfig(MyUserDetailsService myUserDetailsService) {
-        this.myUserDetailsService = myUserDetailsService;
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService userDetailsService) {
+        return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService(UserRepository repo) {
+        return username -> {
+            AppUser user = repo.findByUsername(username)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+            return new org.springframework.security.core.userdetails.User(
+                    user.getUsername(),
+                    user.getPassword(),
+                    user.getRoles().stream()
+                            .map(role -> new SimpleGrantedAuthority(role))
+                            .toList()
+            );
+        };
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+        AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 
     @Bean
@@ -43,25 +69,28 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(
             HttpSecurity http,
             CustomAuthenticationEntryPoint authEntryPoint,
-            CustomAccessDeniedHandler deniedHandler,
+            CustomAccessDeniedHandler deniedHandler, 
+            JwtAuthenticationFilter jwtAuthenticationFilter,
             AuthenticationManager authManager) throws Exception {
+
         http
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/","/h2/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/admin").hasRole("ADMIN")
                         .requestMatchers("/user").hasRole("USER")
-                        .anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults())
+                        .anyRequest().authenticated()
+                )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authEntryPoint) // 401
                         .accessDeniedHandler(deniedHandler) // 403
                 )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .anonymous(anon -> anon.authorities(List.of(new SimpleGrantedAuthority("ROLE_GUEST"))))
-                .authenticationManager(authManager)
-                .headers(headers -> headers.frameOptions(frame -> frame.disable()));
+                .headers(headers -> headers.frameOptions(frame -> frame.disable())); // allow H2 console frames
 
         return http.build();
     }
@@ -69,15 +98,6 @@ public class SecurityConfig {
     @Bean
     public RoleHierarchy roleHierarchy() {
         return RoleHierarchyImpl.fromHierarchy("ROLE_ADMIN > ROLE_USER > ROLE_GUEST");
-    }
-
-    @Bean
-    public AuthenticationManager authManager(HttpSecurity http, PasswordEncoder encoder, MyUserDetailsService userDetailsService) throws Exception{
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(encoder);
-
-        return new ProviderManager(provider);
     }
 
     @Bean
