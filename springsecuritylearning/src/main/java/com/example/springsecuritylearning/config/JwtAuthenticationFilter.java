@@ -10,6 +10,9 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.springsecuritylearning.service.TokenRevocationService;
+
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,10 +22,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final TokenRevocationService revokedService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService, TokenRevocationService revokedService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.revokedService = revokedService;
     }
 
     @Override
@@ -45,6 +50,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if(username != null && SecurityContextHolder.getContext().getAuthentication() == null){
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             if(jwtUtil.validateToken(token, userDetails)){
+                String jti = jwtUtil.extractJti(token);
+                if(revokedService.isTokenRevoked(jti)){
+                    // token revoked -> reject
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
+
+                // // optional: check user-level revocation timestamp
+                // Long revokeBefore = /* read from DB/Redis if implemented */;
+                // Date iat = jwtUtil.extractClaim(token, Claims::getIssuedAt);
+                // if (revokeBefore != null && iat != null && iat.getTime() < revokeBefore) {
+                //     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                //     return;
+                // }
+
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

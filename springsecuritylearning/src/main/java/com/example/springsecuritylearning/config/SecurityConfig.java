@@ -24,6 +24,7 @@ import com.example.springsecuritylearning.auth.CustomAccessDeniedHandler;
 import com.example.springsecuritylearning.auth.CustomAuthenticationEntryPoint;
 import com.example.springsecuritylearning.model.AppUser;
 import com.example.springsecuritylearning.repository.UserRepository;
+import com.example.springsecuritylearning.service.TokenRevocationService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,8 +35,8 @@ public class SecurityConfig {
     private final JwtUtil jwtUtil;
 
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService userDetailsService) {
-        return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
+    public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService userDetailsService, TokenRevocationService revSvc) {
+        return new JwtAuthenticationFilter(jwtUtil, userDetailsService, revSvc);
     }
 
     @Bean

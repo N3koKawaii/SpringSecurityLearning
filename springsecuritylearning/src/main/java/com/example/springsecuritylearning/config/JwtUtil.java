@@ -3,6 +3,7 @@ package com.example.springsecuritylearning.config;
 import java.security.Key;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +32,10 @@ public class JwtUtil {
         var roles = userDetails.getAuthorities().stream()
                 .map(Object::toString).toList();
 
+        String jti = UUID.randomUUID().toString();
+
         return Jwts.builder()
+                .setId(jti)
                 .setSubject(userDetails.getUsername())
                 .claim("roles", roles)
                 .setIssuedAt(new Date())
@@ -44,13 +48,20 @@ public class JwtUtil {
         var roles = userDetails.getAuthorities().stream()
                 .map(Object::toString).toList();
 
+        String jti = UUID.randomUUID().toString();  
+
         return Jwts.builder()
+                .setId(jti)
                 .setSubject(userDetails.getUsername())
                 .claim("roles",roles)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + refreshExpirationMs))
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
+    }
+
+    public String extractJti(String token) {
+        return extractClaim(token, Claims::getId);
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver){
